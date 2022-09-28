@@ -5,13 +5,6 @@
 <h4>Описание домашнего задания</h4>
 
 <ul>
-<li>Между двумя виртуалками поднять vpn в режимах<br />
-● tun;<br />
-● tap;<br />
-Прочувствовать разницу.</li>
-
-
-
 <li>взять стенд https://github.com/erlong15/vagrant-bind</li>
 <li>добавить еще один сервер client2</li>
 <li>завести в зоне dns.lab</li>
@@ -28,38 +21,76 @@
 Формат сдачи ДЗ - vagrant + ansible</li>
 </ul>
 
-<h4>1. TUN/TAP режимы VPN</h4>
+<h4>1. Работа со стендом и настройка DNS</h4>
 
-<p>В домашней директории создадим директорию vpn, в котором будут храниться настройки виртуальных машин:</p>
+<p>В домашней директории создадим директорию dns, в котором будут храниться настройки виртуальных машин:</p>
 
-<pre>[user@localhost otus]$ mkdir ./vpn
+<pre>[user@localhost otus]$ mkdir ./dns
 [user@localhost otus]$</pre>
 
-<p>Перейдём в директорию vpn:</p>
+<p>Перейдём в директорию dns:</p>
 
-<pre>[user@localhost otus]$ cd ./vpn/
-[user@localhost vpn]$</pre>
+<pre>[user@localhost otus]$ cd ./dns/
+[user@localhost dns]$</pre>
 
-<p>Создадим файл Vagrantfile:</p>
+<p>Скачаем стенд https://github.com/erlong15/vagrant-bind и изучим содержимое файлов:</p>
+
+<pre>[user@localhost dns]$ ls -l
+total 12
+drwxrwxr-x. 2 user user 4096 фев 16  2020 provisioning
+-rw-rw-r--. 1 user user 3100 сен 29 00:00 README.md
+-rw-rw-r--. 1 user user  820 фев 16  2020 Vagrantfile
+[user@localhost dns]$</pre>
+
+
+<p>Откроем Vagrantfile, добавим ВМ "client2" и внесём некоторые корректировки, такие как вместо "ansible.sudo = "true" запишем "ansible.<b>become</b> = "true"":</p>
 
 <pre>[user@localhost vpn]$ vi ./Vagrantfile</pre>
-
-<p>1. Заполним следующим содержимым:</p>
 
 <pre># -*- mode: ruby -*-
 # vi: set ft=ruby :
 
 Vagrant.configure(2) do |config|
   config.vm.box = "centos/7"
-  config.vm.define "server" do |server|
-    server.vm.hostname = "server.loc"
-    server.vm.network "private_network", ip: "192.168.10.10"
+
+  config.vm.provision "ansible" do |ansible|
+    ansible.verbose = "vvv"
+    ansible.playbook = "provisioning/playbook.yml"
+    ansible.<b>become</b> = "true"
   end
+
+
+  config.vm.provider "virtualbox" do |v|
+	  v.memory = 256
+  end
+
+  config.vm.define "ns01" do |ns01|
+    ns01.vm.network "private_network", ip: "192.168.50.10", virtualbox__intnet: "dns"
+    ns01.vm.hostname = "ns01"
+  end
+
+  config.vm.define "ns02" do |ns02|
+    ns02.vm.network "private_network", ip: "192.168.50.11", virtualbox__intnet: "dns"
+    ns02.vm.hostname = "ns02"
+  end
+
   config.vm.define "client" do |client|
-    client.vm.hostname = "client.loc"
-    client.vm.network "private_network", ip: "192.168.10.20"
+    client.vm.network "private_network", ip: "192.168.50.15", virtualbox__intnet: "dns"
+    client.vm.hostname = "client"
   end
+
+  <b>config.vm.define "client2" do |client2|
+    client2.vm.network "private_network", ip: "192.168.50.16", virtualbox__intnet: "dns"
+    client2.vm.hostname = "client2"
+  end</b>
+
 end</pre>
+
+
+
+
+
+
 
 <p>Запустим эти виртуальные машины:</p>
 
