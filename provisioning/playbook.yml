@@ -3,11 +3,31 @@
   become: yes
   tasks:
   - name: install packages
-    yum: name={{ item }} state=latest 
-    with_items:
+    yum: 
+      name:
       - bind
       - bind-utils
-      - ntp
+#      - ntp
+      state: latest
+      update_cache: true
+
+  - name: start chronyd
+    service:
+      name: chronyd
+      state: restarted
+      enabled: true
+
+#  - name: stop and disable chronyd
+#    service:
+#      name: chronyd
+#      state: stopped
+#      enabled: false
+
+#  - name: start and enable ntpd
+#    service:
+#      name: ntpd
+#      state: started
+#      enabled: true
 
   - name: copy transferkey to all servers and the client
     copy: src=named.zonetransfer.key dest=/etc/named.zonetransfer.key owner=root group=named mode=0644
@@ -53,3 +73,14 @@
     copy: src=rndc.conf dest=/home/vagrant/rndc.conf owner=vagrant group=vagrant mode=0644
   - name: copy motd to the client
     copy: src=client-motd dest=/etc/motd owner=root group=root mode=0644
+
+- hosts: client2
+  become: yes
+  tasks:
+  - name: copy resolv.conf to the client
+    copy: src=client-resolv.conf dest=/etc/resolv.conf owner=root group=root mode=0644
+  - name: copy rndc conf file
+    copy: src=rndc.conf dest=/home/vagrant/rndc.conf owner=vagrant group=vagrant mode=0644
+  - name: copy motd to the client
+    copy: src=client-motd dest=/etc/motd owner=root group=root mode=0644
+

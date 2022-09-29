@@ -43,7 +43,7 @@ drwxrwxr-x. 2 user user 4096 фев 16  2020 provisioning
 [user@localhost dns]$</pre>
 
 
-<p>Откроем Vagrantfile, добавим ВМ "client2" и внесём некоторые корректировки, такие как вместо "ansible.sudo = "true" запишем "ansible.<b>become</b> = "true"":</p>
+<p>Откроем Vagrantfile, добавим ВМ client2 и внесём некоторые корректировки, такие как вместо <i>ansible.sudo = "true"</i> запишем <i>ansible.<b>become</b> = "true"</i>:</p>
 
 <pre>[user@localhost vpn]$ vi ./Vagrantfile</pre>
 
@@ -86,6 +86,110 @@ Vagrant.configure(2) do |config|
 
 end</pre>
 
+<p>После того, как добавили виртуальную машину client2, разберём содержимое каталога provisioning:</p>
+
+<pre>ls -l ./provisioning</pre>
+
+<p>Рассмотрим требуемые нам файлы:<br />
+● playbook.yml — это Ansible-playbook, в котором содержатся инструкции по настройке нашего стенда<br />
+● client-motd — файл, содержимое которого будет появляться перед пользователем, который подключился по SSH<br />
+● named.ddns.lab и named.dns.lab — файлы описания зон ddns.lab и dns.lab соответсвенно<br />
+● master-named.conf и slave-named.conf — конфигурационные файлы, в которых хранятся настройки DNS-сервера<br />
+● client-resolv.conf и servers-resolv.conf — файлы, в которых содержатся IP-адреса DNS-серверов</p>
+
+<p>содержимое файла playbook.yml:</p>
+
+<pre>---
+- hosts: all
+  become: yes
+  tasks:
+
+#Установка пакетов bind, bind-utils и ntp
+  - name: install packages
+    yum: name={{ item }} state=latest
+    with_items:
+    - bind
+    - bind-utils
+    - ntp
+
+#Копирование файла named.zonetransfer.key на хосты с правами 0644
+#Владелец файла — root, група файла — named</pre>
+  - name: copy transferkey to all servers and the client
+    copy: src=named.zonetransfer.key dest=/etc/named.zonetransfer.key owner=root group=named mode=0644
+
+#Настройка хоста ns01
+- hosts: ns01
+  become: yes
+  tasks:
+
+#Копирование конфигурации DNS-сервера
+  - name: copy named.conf
+    copy: src=master-named.conf dest=/etc/named.conf owner=root group=named mode=0640
+
+#Копирование файлов с настроками зоны.
+#Будут скопированы все файлы, в имя которых начинается на «named.d»
+  - name: copy zones
+    copy: src={{ item }} dest=/etc/named/ owner=root group=named mode=0660
+    with_fileglob:
+    - named.d*
+
+#Копирование файла resolv.conf
+  - name: copy resolv.conf to the servers
+    copy: src=servers-resolv.conf dest=/etc/resolv.conf owner=root group=root mode=0644
+
+#Изменение прав каталога /etc/named
+#Права 670, владелец — root, группа — named
+  - name: set /etc/named permissions
+    file: path=/etc/named owner=root group=named mode=0670
+
+#Перезапуск службы Named и добавление её в автозагрузку
+  - name: ensure named is running and enabled
+    service: name=named state=restarted enabled=yes
+
+- hosts: ns02
+  become: yes
+  tasks:
+  - name: copy named.conf
+    copy: src=slave-named.conf dest=/etc/named.conf owner=root group=named mode=0640
+
+  - name: copy resolv.conf to the servers
+    copy: src=servers-resolv.conf dest=/etc/resolv.conf owner=root group=root mode=0644
+
+  - name: set /etc/named permissions
+    file: path=/etc/named owner=root group=named mode=0670
+
+  - name: ensure named is running and enabled
+    service: name=named state=restarted enabled=yes
+
+- hosts: client
+  become: yes
+  tasks:
+  - name: copy resolv.conf to the client
+    copy: src=client-resolv.conf dest=/etc/resolv.conf owner=root group=root mode=0644
+
+#Копирование конфигруационного файла rndc
+  - name: copy rndc conf file
+    copy: src=rndc.conf dest=/home/vagrant/rndc.conf owner=vagrant group=vagrant mode=0644
+
+#Настройка сообщения при входе на сервер
+  - name: copy motd to the client
+    copy: src=client-motd dest=/etc/motd owner=root group=root mode=0644</pre>
+
+<p>Так как мы добавили ещё одну виртуальную машину (client2), нам потребуется её настроить. Так как настройки будут совпадать с ВМ client, то мы просто добавим хост в модуль по настройке клиента:</p>
+
+<pre>- hosts: client,client2
+  become: yes
+  tasks:
+  - name: copy resolv.conf to the client
+    copy: src=client-resolv.conf dest=/etc/resolv.conf owner=root group=root mode=0644
+
+#Копирование конфигруационного файла rndc
+  - name: copy rndc conf file
+    copy: src=rndc.conf dest=/home/vagrant/rndc.conf owner=vagrant group=vagrant mode=0644
+
+#Настройка сообщения при входе на сервер
+  - name: copy motd to the client
+    copy: src=client-motd dest=/etc/motd owner=root group=root mode=0644</pre>
 
 
 
