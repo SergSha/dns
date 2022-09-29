@@ -97,6 +97,13 @@ end</pre>
 ● master-named.conf и slave-named.conf — конфигурационные файлы, в которых хранятся настройки DNS-сервера<br />
 ● client-resolv.conf и servers-resolv.conf — файлы, в которых содержатся IP-адреса DNS-серверов</p>
 
+<ul>Рассмотрим требуемые нам файлы:
+<li>playbook.yml — это Ansible-playbook, в котором содержатся инструкции по настройке нашего стенда</li>
+<li>client-motd — файл, содержимое которого будет появляться перед пользователем, который подключился по SSH</li>
+<li>named.ddns.lab и named.dns.lab — файлы описания зон ddns.lab и dns.lab соответсвенно</li>
+<li>master-named.conf и slave-named.conf — конфигурационные файлы, в которых хранятся настройки DNS-сервера</li>
+<li>client-resolv.conf и servers-resolv.conf — файлы, в которых содержатся IP-адреса DNS-серверов</li></ul>
+
 <p>содержимое файла playbook.yml:</p>
 
 <pre>---
