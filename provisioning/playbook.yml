@@ -37,12 +37,15 @@
   tasks:
   - name: copy named.conf
     copy: src=master-named.conf dest=/etc/named.conf owner=root group=named mode=0640
+
   - name: copy zones
     copy: src={{ item }} dest=/etc/named/ owner=root group=named mode=0660
     with_fileglob:
       - named.d*
+
   - name: copy resolv.conf to the servers
-    copy: src=servers-resolv.conf dest=/etc/resolv.conf owner=root group=root mode=0644
+    template: src=servers-resolv.conf.j2 dest=/etc/resolv.conf owner=root group=root mode=0644
+
   
   - name: set /etc/named permissions
     file: path=/etc/named owner=root group=named mode=0670
@@ -55,8 +58,9 @@
   tasks:
   - name: copy named.conf
     copy: src=slave-named.conf dest=/etc/named.conf owner=root group=named mode=0640
+
   - name: copy resolv.conf to the servers
-    copy: src=servers-resolv.conf dest=/etc/resolv.conf owner=root group=root mode=0644
+    template: src=servers-resolv.conf.j2 dest=/etc/resolv.conf owner=root group=root mode=0644
 
   - name: set /etc/named permissions
     file: path=/etc/named owner=root group=named mode=0670
@@ -69,8 +73,10 @@
   tasks:
   - name: copy resolv.conf to the client
     copy: src=client-resolv.conf dest=/etc/resolv.conf owner=root group=root mode=0644
+
   - name: copy rndc conf file
     copy: src=rndc.conf dest=/home/vagrant/rndc.conf owner=vagrant group=vagrant mode=0644
+
   - name: copy motd to the client
     copy: src=client-motd dest=/etc/motd owner=root group=root mode=0644
 
@@ -79,8 +85,10 @@
   tasks:
   - name: copy resolv.conf to the client
     copy: src=client-resolv.conf dest=/etc/resolv.conf owner=root group=root mode=0644
+
   - name: copy rndc conf file
     copy: src=rndc.conf dest=/home/vagrant/rndc.conf owner=vagrant group=vagrant mode=0644
+
   - name: copy motd to the client
     copy: src=client-motd dest=/etc/motd owner=root group=root mode=0644
 

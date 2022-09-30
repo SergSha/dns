@@ -267,7 +267,6 @@ tcp    LISTEN     0      100       [::1]:25                 [::]:*              
 listen-on port 53 { 192.168.50.11; };
 listen-on-v6 port 53 { ::1; };</pre>
 
-<p>Исходя из данной информации, нам нужно подкорректировать файл /etc/resolv.conf для DNS-серверов: на хосте ns01 указать nameserver 192.168.50.10, а на хосте ns02 — 192.168.50.11</p>
 
 
 <p>Аналогично на сервере ns02:</p>
@@ -304,3 +303,70 @@ tcp   LISTEN     0      128                                                     
         listen-on-v6 port 53 { ::1; };
 ...
 [root@ns02 ~]#</pre>
+
+<p>Исходя из данной информации, нам нужно подкорректировать файл /etc/resolv.conf для DNS-серверов: на хосте ns01 указать nameserver 192.168.50.10, а на хосте ns02 — 192.168.50.11</p>
+
+<pre>[root@<b>ns01</b> ~]# vi /etc/resolv.conf
+domain dns.lab
+search dns.lab
+nameserver 192.168.50.10</pre>
+
+<pre>[root@<b>ns02</b> ~]# vi /etc/resolv.conf
+domain dns.lab
+search dns.lab
+nameserver 192.168.50.11</pre>
+
+<p>В Ansible для этого воспользуемся шаблоном с Jinja. Изменим имя файла servers-resolv.conf на servers-resolv.conf.j2 и укажем там следующие условия:</p>
+
+<pre>domain dns.lab
+search dns.lab
+#Если имя сервера ns02, то указываем nameserver 192.168.50.11
+{% if ansible_hostname == 'ns02' %}
+nameserver 192.168.50.11
+{% endif %}
+#Если имя сервера ns01, то указываем nameserver 192.168.50.10
+{% if ansible_hostname == 'ns01' %}
+nameserver 192.168.50.10
+{% endif %}</pre>
+
+<p>После внесение измений в файл, внесём измения в ansible-playbook:<br />
+Используем вместо модуля copy модуль template:</p>
+
+<pre>- name: copy resolv.conf to the servers
+template: src=servers-resolv.conf.j2 dest=/etc/resolv.conf owner=root
+group=root mode=0644</pre>
+
+<h4>Добавление имён в зону dns.lab</h4>
+
+<p>Проверим, что зона dns.lab уже существует на DNS-серверах:<br />
+Фрагмент файла /etc/named.conf на сервере ns01:</p>
+
+<pre>// Имя зоны
+zone "dns.lab" {
+  type master;
+  // Тем, у кого есть ключ zonetransfer.key можно получать копию файла зоны
+  allow-transfer { key "zonetransfer.key"; };
+  // Файл с настройками зоны
+  file "/etc/named/named.dns.lab";
+};</pre>
+
+<p>Похожий фрагмент файла /etc/named.conf находится на slave-сервере ns02:</p>
+
+<pre>// Имя зоны
+zone "dns.lab" {
+  type slave;
+  // Адрес мастера, куда будет обращаться slave-сервер
+  masters { 192.168.50.10; };
+};</pre>
+
+
+
+
+
+
+
+
+
+
+
+
