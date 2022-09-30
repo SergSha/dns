@@ -45,7 +45,7 @@ drwxrwxr-x. 2 user user 4096 фев 16  2020 provisioning
 
 <p>Откроем Vagrantfile, добавим ВМ client2 и внесём некоторые корректировки, такие как вместо <i>ansible.sudo = "true"</i> запишем <i>ansible.<b>become</b> = "true"</i>:</p>
 
-<pre>[user@localhost vpn]$ vi ./Vagrantfile</pre>
+<pre>[user@localhost dns]$ vi ./Vagrantfile</pre>
 
 <pre># -*- mode: ruby -*-
 # vi: set ft=ruby :
@@ -198,28 +198,109 @@ end</pre>
 
 <p>Запустим эти виртуальные машины:</p>
 
-<pre>[user@localhost vpn]$ vagrant up</pre>
+<pre>[user@localhost dns]$ vagrant up</pre>
 
 <p>Проверим состояние созданной и запущенной машины:</p>
 
-<pre>[user@localhost vpn]$ vagrant status
+<pre>[user@localhost dns]$ vagrant status
 Current machine states:
 
-server                    running (virtualbox)
+ns01                      running (virtualbox)
+ns02                      running (virtualbox)
 client                    running (virtualbox)
+client2                   running (virtualbox)
 
 This environment represents multiple VMs. The VMs are all listed
 above with their current state. For more information about a specific
 VM, run `vagrant status NAME`.
-[user@localhost vpn]$</pre>
+[user@localhost dns]$</pre>
+
+<p>Перед выполнением следующих заданий, нужно обратить внимаение, на каком адресе и порту работают наши DNS-сервера.</p>
+
+<p>Проверить это можно двумя способами:<br />
+● Посмотреть с помощью команды SS:</p>
 
 <p>2. Заходим на ВМ server и зайдём под пользователем root:</p>
 
-<pre>[user@localhost vpn]$ vagrant ssh server
-[vagrant@server ~]$ sudo -i
-[root@server ~]# </pre>
+<pre>[user@localhost dns]$ vagrant ssh ns01
+[vagrant@ns01 ~]$ sudo -i
+[root@ns01 ~]# </pre>
 
-<p>Выполняем следующие действия:<br />
-● устанавливаем epel репозиторий:</p>
+<pre>[root@ns01 ~]# <b>ss -tulpn</b>
+Netid  State      Recv-Q Send-Q Local Address:Port               Peer Address:Po                                                                                                                                   rt
+udp    UNCONN     0      0         *:969                   *:*                                                                                                                                                      users:(("rpcbind",pid=400,fd=7))
+udp    UNCONN     0      0      192.168.50.10:53                    *:*                                                                                                                                                      users:(("named",pid=4423,fd=512))
+udp    UNCONN     0      0      127.0.0.1:323                   *:*                                                                                                                                                      users:(("chronyd",pid=3468,fd=5))
+udp    UNCONN     0      0         *:68                    *:*                                                                                                                                                      users:(("dhclient",pid=2364,fd=6))
+udp    UNCONN     0      0         *:111                   *:*                                                                                                                                                      users:(("rpcbind",pid=400,fd=6))
+udp    UNCONN     0      0      [::]:969                [::]:*                                                                                                                                                      users:(("rpcbind",pid=400,fd=10))
+udp    UNCONN     0      0         [::1]:53                 [::]:*                                                                                                                                                      users:(("named",pid=4423,fd=513))
+udp    UNCONN     0      0         [::1]:323                [::]:*                                                                                                                                                      users:(("chronyd",pid=3468,fd=6))
+udp    UNCONN     0      0      [::]:111                [::]:*                                                                                                                                                      users:(("rpcbind",pid=400,fd=9))
+tcp    LISTEN     0      128       *:111                   *:*                                                                                                                                                      users:(("rpcbind",pid=400,fd=8))
+<b>tcp    LISTEN     0      10     192.168.50.10:53                    *:*                                                                                                                                                      users:(("named",pid=4423,fd=21))</b>
+tcp    LISTEN     0      128       *:22                    *:*                                                                                                                                                      users:(("sshd",pid=611,fd=3))
+tcp    LISTEN     0      128    192.168.50.10:953                   *:*                                                                                                                                                      users:(("named",pid=4423,fd=23))
+tcp    LISTEN     0      100    127.0.0.1:25                    *:*                                                                                                                                                      users:(("master",pid=700,fd=13))
+tcp    LISTEN     0      128    [::]:111                [::]:*                                                                                                                                                      users:(("rpcbind",pid=400,fd=11))
+tcp    LISTEN     0      10        [::1]:53                 [::]:*                                                                                                                                                      users:(("named",pid=4423,fd=22))
+tcp    LISTEN     0      128    [::]:22                 [::]:*                                                                                                                                                      users:(("sshd",pid=611,fd=4))
+tcp    LISTEN     0      100       [::1]:25                 [::]:*                                                                                                                                                      users:(("master",pid=700,fd=14))
+[root@ns01 ~]#</pre>
 
-<pre>[root@server ~]# yum install -y epel-release</pre>
+
+<p>● Посмотреть информацию в настройках DNS-сервера (/etc/named.conf)<br />
+✔ На хосте ns01:</p>
+
+<pre>[root@ns01 ~]# cat /etc/named.conf
+...
+
+    // network
+        <b>listen-on port 53 { 192.168.50.10; };</b>
+        listen-on-v6 port 53 { ::1; };
+...
+[root@ns01 ~]#</pre>
+
+<p>✔ На хосте ns02:</p>
+
+<pre>// network
+listen-on port 53 { 192.168.50.11; };
+listen-on-v6 port 53 { ::1; };</pre>
+
+<p>Исходя из данной информации, нам нужно подкорректировать файл /etc/resolv.conf для DNS-серверов: на хосте ns01 указать nameserver 192.168.50.10, а на хосте ns02 — 192.168.50.11</p>
+
+
+<p>Аналогично на сервере ns02:</p>
+
+<pre>[student@pv-homeworks1-10 dns]$ vagrant ssh ns02
+Last login: Fri Sep 30 10:04:26 2022 from 10.0.2.2
+[vagrant@ns02 ~]$ sudo -i
+[root@ns02 ~]# ss -tulpn
+Netid State      Recv-Q Send-Q                                                          Local Address:Port                                                                         Peer Address:Port
+udp   UNCONN     0      0                                                                   127.0.0.1:323                                                                                     *:*                   users:(("chronyd",pid=3467,fd=5))
+udp   UNCONN     0      0                                                                           *:68                                                                                      *:*                   users:(("dhclient",pid=2359,fd=6))
+udp   UNCONN     0      0                                                                           *:111                                                                                     *:*                   users:(("rpcbind",pid=387,fd=6))
+udp   UNCONN     0      0                                                                           *:975                                                                                     *:*                   users:(("rpcbind",pid=387,fd=7))
+udp   UNCONN     0      0                                                               192.168.50.11:53                                                                                      *:*                   users:(("named",pid=4079,fd=512))
+udp   UNCONN     0      0                                                                       [::1]:323                                                                                  [::]:*                   users:(("chronyd",pid=3467,fd=6))
+udp   UNCONN     0      0                                                                        [::]:111                                                                                  [::]:*                   users:(("rpcbind",pid=387,fd=9))
+udp   UNCONN     0      0                                                                        [::]:975                                                                                  [::]:*                   users:(("rpcbind",pid=387,fd=10))
+udp   UNCONN     0      0                                                                       [::1]:53                                                                                   [::]:*                   users:(("named",pid=4079,fd=513))
+<b>tcp   LISTEN     0      128                                                             192.168.50.11:953                                                                                     *:*                   users:(("named",pid=4079,fd=23))</b>
+tcp   LISTEN     0      100                                                                 127.0.0.1:25                                                                                      *:*                   users:(("master",pid=875,fd=13))
+tcp   LISTEN     0      128                                                                         *:111                                                                                     *:*                   users:(("rpcbind",pid=387,fd=8))
+tcp   LISTEN     0      10                                                              192.168.50.11:53                                                                                      *:*                   users:(("named",pid=4079,fd=21))
+tcp   LISTEN     0      128                                                                         *:22                                                                                      *:*                   users:(("sshd",pid=663,fd=3))
+tcp   LISTEN     0      100                                                                     [::1]:25                                                                                   [::]:*                   users:(("master",pid=875,fd=14))
+tcp   LISTEN     0      128                                                                      [::]:111                                                                                  [::]:*                   users:(("rpcbind",pid=387,fd=11))
+tcp   LISTEN     0      10                                                                      [::1]:53                                                                                   [::]:*                   users:(("named",pid=4079,fd=22))
+tcp   LISTEN     0      128                                                                      [::]:22                                                                                   [::]:*                   users:(("sshd",pid=663,fd=4))
+[root@ns02 ~]#</pre>
+
+<pre>[root@ns02 ~]# cat /etc/named.conf
+...
+    // network
+        listen-on port 53 { 192.168.50.11; };
+        listen-on-v6 port 53 { ::1; };
+...
+[root@ns02 ~]#</pre>
