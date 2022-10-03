@@ -35,6 +35,7 @@
 - hosts: ns01
   become: yes
   tasks:
+
   - name: copy named.conf
     copy: src=master-named.conf dest=/etc/named.conf owner=root group=named mode=0640
 
@@ -42,6 +43,7 @@
     copy: src={{ item }} dest=/etc/named/ owner=root group=named mode=0660
     with_fileglob:
       - named.d*
+      - named.newdns.lab
 
   - name: copy resolv.conf to the servers
     template: src=servers-resolv.conf.j2 dest=/etc/resolv.conf owner=root group=root mode=0644

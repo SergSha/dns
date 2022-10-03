@@ -343,8 +343,7 @@ nameserver 192.168.50.10
 Используем вместо модуля copy модуль template:</p>
 
 <pre>- name: copy resolv.conf to the servers
-template: src=servers-resolv.conf.j2 dest=/etc/resolv.conf owner=root
-group=root mode=0644</pre>
+  template: src=servers-resolv.conf.j2 dest=/etc/resolv.conf owner=root group=root mode: 0644</pre>
 
 <h4>Добавление имён в зону dns.lab</h4>
 
@@ -514,45 +513,26 @@ tasks:
 <h4>Создание новой зоны и добавление в неё записей</h4>
 
 <p>Для того, чтобы прописать на DNS-серверах новую зону нам потребуется:<br />
-● На хосте ns01 добавить зону в файл /etc/named.conf:</p>
+● На хосте <b>ns01</b> добавить зону в файл /etc/named.conf:</p>
 
 // lab's newdns zone
-zone "newdns.lab" {
-  type master;
+zone "<b>newdns.lab</b>" {
+  type <b>master</b>;
   allow-transfer { key "zonetransfer.key"; };
   allow-update { key "zonetransfer.key"; };
-  file "/etc/named/named.newdns.lab";
+  file "<b>/etc/named/named.newdns.lab</b>";
 };
 
-<p>● На хосте ns02 также добавить зону и указать с какого сервера запрашивать информацию об этой зоне (фрагмент файла /etc/named.conf):</p>
+<p>● На хосте <b>ns02</b> также добавить зону и указать с какого сервера запрашивать информацию об этой зоне (фрагмент файла /etc/named.conf):</p>
 
 <pre>// lab's newdns zone
-zone "newdns.lab" {
-  type slave;
-  masters { 192.168.50.10; };
+zone "<b>newdns.lab</b>" {
+  type <b>slave</b>;
+  masters { <b>192.168.50.10</b>; };
   file "/etc/named/named.newdns.lab";
 };</pre>
 
 <p>● На хосте ns01 создадим файл /etc/named/named.newdns.lab</p>
-
-
-$TTL 3600
-$ORIGIN dns.lab.
-@               IN      SOA     ns01.dns.lab. root.dns.lab. (
-                            2711201407 ; serial
-                            3600       ; refresh (1 hour)
-                            600        ; retry (10 minutes)
-                            86400      ; expire (1 day)
-                            600        ; minimum (10 minutes)
-                        )
-
-                IN      NS      ns01.dns.lab.
-                IN      NS      ns02.dns.lab.
-
-; DNS Servers
-ns01            IN      A       192.168.50.10
-ns02            IN      A       192.168.50.11
-
 
 <pre>vi /etc/named/named.newdns.lab
 $TTL 3600
@@ -572,9 +552,9 @@ $ORIGIN newdns.lab.
 ns01            IN      A       192.168.50.10
 ns02            IN      A       192.168.50.11
 
-; WWW
+<b>; WWW
 www             IN      A       192.168.50.15
-www             IN      A       192.168.50.16</pre>
+www             IN      A       192.168.50.16</b></pre>
 
 <p>В конце этого файла добавим записи www. У файла должны быть права 660, владелец — root, группа — named.</p>
 
