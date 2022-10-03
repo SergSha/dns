@@ -4,28 +4,11 @@
 
 <h4>Описание домашнего задания</h4>
 
-<ul>
-<li>взять стенд https://github.com/erlong15/vagrant-bind</li>
-<li>добавить еще один сервер client2</li>
-<li>завести в зоне dns.lab</li>
-<li>имена</li>
-<li>web1 - смотрит на клиент1</li>
-<li>web2 смотрит на клиент2</li>
-<li>завести еще одну зону newdns.lab</li>
-<li>завести в ней запись</li>
-<li>www - смотрит на обоих клиентов</li>
-<li>настроить split-dns</li>
-<li>клиент1 - видит обе зоны, но в зоне dns.lab только web1</li>
-<li>клиент2 видит только dns.lab</li>
-<li>настроить все без выключения selinux<br />
-Формат сдачи ДЗ - vagrant + ansible</li>
-</ul>
-
 <ol>
 <li>взять стенд https://github.com/erlong15/vagrant-bind<br />
 добавить еще один сервер client2<br />
 завести в зоне dns.lab имена:
-<ul>
+<ul type="disc">
 <li>web1 - смотрит на клиент1</li>
 <li>web2 смотрит на клиент2</li>
 </ul>
@@ -34,7 +17,7 @@
 www - смотрит на обоих клиентов</li>
 
 <li>настроить split-dns
-<ul>
+<ul type="disc">
 <li>клиент1 - видит обе зоны, но в зоне dns.lab только web1</li>
 <li>клиент2 видит только dns.lab</li>
 </ul>
