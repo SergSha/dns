@@ -852,3 +852,181 @@ view "default" {
 };</pre>
 
 
+
+
+
+
+
+
+
+<h4>Проверка на client:</h4>
+
+<pre>[root@client ~]# ping -c 4 www.newdns.lab
+PING www.newdns.lab (192.168.50.15) 56(84) bytes of data.
+64 bytes from client (192.168.50.15): icmp_seq=1 ttl=64 time=0.016 ms
+64 bytes from client (192.168.50.15): icmp_seq=2 ttl=64 time=0.032 ms
+64 bytes from client (192.168.50.15): icmp_seq=3 ttl=64 time=0.073 ms
+64 bytes from client (192.168.50.15): icmp_seq=4 ttl=64 time=0.036 ms
+
+--- www.newdns.lab ping statistics ---
+4 packets transmitted, 4 received, 0% packet loss, time 3000ms
+rtt min/avg/max/mdev = 0.016/0.039/0.073/0.021 ms
+[root@client ~]#</pre>
+
+<pre>[root@client ~]# ping -c 4 web1.dns.lab
+PING web1.dns.lab (192.168.50.15) 56(84) bytes of data.
+64 bytes from client (192.168.50.15): icmp_seq=1 ttl=64 time=0.013 ms
+64 bytes from client (192.168.50.15): icmp_seq=2 ttl=64 time=0.033 ms
+64 bytes from client (192.168.50.15): icmp_seq=3 ttl=64 time=0.033 ms
+64 bytes from client (192.168.50.15): icmp_seq=4 ttl=64 time=0.053 ms
+
+--- web1.dns.lab ping statistics ---
+4 packets transmitted, 4 received, 0% packet loss, time 3002ms
+rtt min/avg/max/mdev = 0.013/0.033/0.053/0.014 ms
+[root@client ~]#</pre>
+
+<pre>[root@client ~]# ping -c 4 web2.dns.lab
+ping: web2.dns.lab: Name or service not known
+[root@client ~]#</pre>
+
+<p>На хосте мы видим, что client видит обе зоны (dns.lab и newdns.lab), однако информацию о хосте web2.dns.lab он получить не может.</p>
+
+<h4>Проверка на client2:</h4>
+
+<pre>[root@client2 ~]# ping -c 4 www.newdns.lab
+ping: www.newdns.lab: Name or service not known
+[root@client2 ~]#</pre>
+
+<pre>[root@client2 ~]# ping -c 4 web1.dns.lab
+PING web1.dns.lab (192.168.50.15) 56(84) bytes of data.
+64 bytes from 192.168.50.15 (192.168.50.15): icmp_seq=1 ttl=64 time=3.81 ms
+64 bytes from 192.168.50.15 (192.168.50.15): icmp_seq=2 ttl=64 time=1.62 ms
+64 bytes from 192.168.50.15 (192.168.50.15): icmp_seq=3 ttl=64 time=1.45 ms
+64 bytes from 192.168.50.15 (192.168.50.15): icmp_seq=4 ttl=64 time=1.52 ms
+
+--- web1.dns.lab ping statistics ---
+4 packets transmitted, 4 received, 0% packet loss, time 3006ms
+rtt min/avg/max/mdev = 1.453/2.104/3.818/0.992 ms
+[root@client2 ~]#</pre>
+
+<pre>[root@client2 ~]# ping -c 4 web2.dns.lab
+PING web2.dns.lab (192.168.50.16) 56(84) bytes of data.
+64 bytes from client2 (192.168.50.16): icmp_seq=1 ttl=64 time=0.048 ms
+64 bytes from client2 (192.168.50.16): icmp_seq=2 ttl=64 time=0.037 ms
+64 bytes from client2 (192.168.50.16): icmp_seq=3 ttl=64 time=0.038 ms
+64 bytes from client2 (192.168.50.16): icmp_seq=4 ttl=64 time=0.045 ms
+
+--- web2.dns.lab ping statistics ---
+4 packets transmitted, 4 received, 0% packet loss, time 3001ms
+rtt min/avg/max/mdev = 0.037/0.042/0.048/0.004 ms
+[root@client2 ~]#</pre>
+
+<p>Тут мы понимаем, что client2 видит всю зону dns.lab и не видит зону newdns.lab</p>
+
+<p>Для того, чтобы проверить что master и slave сервера отдают одинаковую информацию, в файле /etc/resolv.conf можно удалить на время nameserver 192.168.50.10 и попробовать выполнить все те же проверки:</p>
+
+<p><b>client:</b></p>
+
+<pre>[root@client ~]# vi /etc/resolv.conf
+domain dns.lab
+search dns.lab
+nameserver 192.168.50.11</pre>
+
+<pre>[root@client ~]# ping -c 4 www.newdns.lab
+PING www.newdns.lab (192.168.50.15) 56(84) bytes of data.
+64 bytes from client (192.168.50.15): icmp_seq=1 ttl=64 time=0.032 ms
+64 bytes from client (192.168.50.15): icmp_seq=2 ttl=64 time=0.033 ms
+64 bytes from client (192.168.50.15): icmp_seq=3 ttl=64 time=0.035 ms
+64 bytes from client (192.168.50.15): icmp_seq=4 ttl=64 time=0.035 ms
+
+--- www.newdns.lab ping statistics ---
+4 packets transmitted, 4 received, 0% packet loss, time 3002ms
+rtt min/avg/max/mdev = 0.032/0.033/0.035/0.007 ms
+[root@client ~]#</pre>
+
+<pre>[root@client ~]# ping -c 4 web1.dns.lab
+PING web1.dns.lab (192.168.50.15) 56(84) bytes of data.
+64 bytes from client (192.168.50.15): icmp_seq=1 ttl=64 time=0.015 ms
+64 bytes from client (192.168.50.15): icmp_seq=2 ttl=64 time=0.037 ms
+64 bytes from client (192.168.50.15): icmp_seq=3 ttl=64 time=0.130 ms
+64 bytes from client (192.168.50.15): icmp_seq=4 ttl=64 time=0.034 ms
+
+--- web1.dns.lab ping statistics ---
+4 packets transmitted, 4 received, 0% packet loss, time 3002ms
+rtt min/avg/max/mdev = 0.015/0.054/0.130/0.044 ms
+[root@client ~]#</pre>
+
+<pre>
+???????????????????????????????????????????????????????????????????????????
+
+[root@client ~]# ping -c 4 web2.dns.lab
+PING web2.dns.lab (192.168.50.16) 56(84) bytes of data.
+64 bytes from 192.168.50.16 (192.168.50.16): icmp_seq=1 ttl=64 time=1.72 ms
+64 bytes from 192.168.50.16 (192.168.50.16): icmp_seq=2 ttl=64 time=2.02 ms
+64 bytes from 192.168.50.16 (192.168.50.16): icmp_seq=3 ttl=64 time=1.33 ms
+64 bytes from 192.168.50.16 (192.168.50.16): icmp_seq=4 ttl=64 time=1.04 ms
+
+--- web2.dns.lab ping statistics ---
+4 packets transmitted, 4 received, 0% packet loss, time 3006ms
+rtt min/avg/max/mdev = 1.049/1.533/2.028/0.375 ms
+[root@client ~]# vi /etc/resolv.conf
+[root@client ~]# ping -c 4 web2.dns.lab
+ping: web2.dns.lab: Name or service not known
+[root@client ~]#
+
+???????????????????????????????????????????????????????????????????????????
+</pre>
+
+<p><b>client2:</b></p>
+
+<pre>[root@client2 ~]# vi /etc/resolv.conf
+domain dns.lab
+search dns.lab
+nameserver 192.168.50.11</pre>
+
+<pre>
+???????????????????????????????????????????????????????????????????????????
+
+[root@client2 ~]# ping -c 4  www.newdns.lab
+PING www.newdns.lab (192.168.50.16) 56(84) bytes of data.
+64 bytes from client2 (192.168.50.16): icmp_seq=1 ttl=64 time=0.042 ms
+64 bytes from client2 (192.168.50.16): icmp_seq=2 ttl=64 time=0.035 ms
+64 bytes from client2 (192.168.50.16): icmp_seq=3 ttl=64 time=0.061 ms
+64 bytes from client2 (192.168.50.16): icmp_seq=4 ttl=64 time=0.051 ms
+
+--- www.newdns.lab ping statistics ---
+4 packets transmitted, 4 received, 0% packet loss, time 3000ms
+rtt min/avg/max/mdev = 0.035/0.047/0.061/0.010 ms
+[root@client2 ~]# vi /etc/resolv.conf
+[root@client2 ~]# ping -c 4  www.newdns.lab
+ping: www.newdns.lab: Name or service not known
+[root@client2 ~]#
+
+???????????????????????????????????????????????????????????????????????????
+</pre>
+
+<pre>[root@client2 ~]# ping -c 4 web1.dns.lab
+PING web1.dns.lab (192.168.50.15) 56(84) bytes of data.
+64 bytes from 192.168.50.15 (192.168.50.15): icmp_seq=1 ttl=64 time=1.79 ms
+64 bytes from 192.168.50.15 (192.168.50.15): icmp_seq=2 ttl=64 time=1.56 ms
+64 bytes from 192.168.50.15 (192.168.50.15): icmp_seq=3 ttl=64 time=1.57 ms
+64 bytes from 192.168.50.15 (192.168.50.15): icmp_seq=4 ttl=64 time=1.34 ms
+
+--- web1.dns.lab ping statistics ---
+4 packets transmitted, 4 received, 0% packet loss, time 3005ms
+rtt min/avg/max/mdev = 1.343/1.570/1.799/0.166 ms
+[root@client2 ~]#</pre>
+
+<pre>[root@client2 ~]# ping -c 4 web2.dns.lab
+PING web2.dns.lab (192.168.50.16) 56(84) bytes of data.
+64 bytes from client2 (192.168.50.16): icmp_seq=1 ttl=64 time=0.015 ms
+64 bytes from client2 (192.168.50.16): icmp_seq=2 ttl=64 time=0.037 ms
+64 bytes from client2 (192.168.50.16): icmp_seq=3 ttl=64 time=0.070 ms
+64 bytes from client2 (192.168.50.16): icmp_seq=4 ttl=64 time=0.069 ms
+
+--- web2.dns.lab ping statistics ---
+4 packets transmitted, 4 received, 0% packet loss, time 3000ms
+rtt min/avg/max/mdev = 0.015/0.047/0.070/0.024 ms
+[root@client2 ~]#</pre>
+
+<p>Как мы наблюдаем, что после удаления из /etc/resolv.conf строки 'nameserver 192.168.50.10' результаты теста практически те же самые.</p>
