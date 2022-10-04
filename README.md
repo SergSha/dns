@@ -1149,5 +1149,8 @@ rtt min/avg/max/mdev = 0.015/0.061/0.077/0.026 ms
 
 <p>Как мы наблюдаем, что после удаления из /etc/resolv.conf строки 'nameserver 192.168.50.10' результаты теста практически те же самые.</p>
 
+<h4>Запуск тестового стенда DNS</h4>
+
+<pre>git clone https://github.com/SergSha/dns.git && cd ./dns/ && vagrant up</pre>
 
 
