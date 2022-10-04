@@ -230,7 +230,9 @@ VM, run `vagrant status NAME`.
 <p>Проверить это можно двумя способами:<br />
 ● Посмотреть с помощью команды SS:</p>
 
-<p>2. Заходим на ВМ server и зайдём под пользователем root:</p>
+<p>✔ На хосте ns01:</p>
+
+<p>Заходим на ВМ server и зайдём под пользователем root:</p>
 
 <pre>[user@localhost dns]$ vagrant ssh ns01
 [vagrant@ns01 ~]$ sudo -i
@@ -259,8 +261,7 @@ tcp    LISTEN     0      100       [::1]:25                 [::]:*              
 [root@ns01 ~]#</pre>
 
 
-<p>● Посмотреть информацию в настройках DNS-сервера (/etc/named.conf)<br />
-✔ На хосте ns01:</p>
+<p>● Посмотреть информацию в настройках DNS-сервера (/etc/named.conf):</p>
 
 <pre>[root@ns01 ~]# cat /etc/named.conf
 ...
@@ -272,12 +273,6 @@ tcp    LISTEN     0      100       [::1]:25                 [::]:*              
 [root@ns01 ~]#</pre>
 
 <p>✔ На хосте ns02:</p>
-
-<pre>// network
-listen-on port 53 { 192.168.50.11; };
-listen-on-v6 port 53 { ::1; };</pre>
-
-
 
 <p>Аналогично на сервере ns02:</p>
 
@@ -350,7 +345,8 @@ nameserver 192.168.50.10
 <p>Проверим, что зона dns.lab уже существует на DNS-серверах:<br />
 Фрагмент файла /etc/named.conf на сервере ns01:</p>
 
-<pre>// Имя зоны
+<pre>vi /etc/named.conf
+// Имя зоны
 zone "dns.lab" {
   type master;
   // Тем, у кого есть ключ zonetransfer.key можно получать копию файла зоны
@@ -361,7 +357,8 @@ zone "dns.lab" {
 
 <p>Похожий фрагмент файла /etc/named.conf находится на slave-сервере ns02:</p>
 
-<pre>// Имя зоны
+<pre>vi /etc/named.conf
+// Имя зоны
 zone "dns.lab" {
   type slave;
   // Адрес мастера, куда будет обращаться slave-сервер
@@ -390,8 +387,8 @@ ns02            IN      A       192.168.50.11</pre>
 <p>Именно в этот файл нам потребуется добавить имена. Допишем в конец файла следующие строки:</p>
 
 <pre>; Web
-web1 IN A 192.168.50.15
-web2 IN A 192.168.50.16</pre>
+web1            IN      A       192.168.50.15
+web2            IN      A       192.168.50.16</pre>
 
 <p>Если изменения внесены вручную, то для применения настроек нужно:<br />
 ● Перезапустить службу named: systemctl restart named<br />
@@ -435,11 +432,11 @@ ns02.dns.lab.           3600    IN      A       192.168.50.11
 
 <pre>[root@<b>client</b> ~]# <b>dig @192.168.50.11 web2.dns.lab</b>
 
-; &gt;&gt;&gt;&gt; DiG 9.11.4-P2-RedHat-9.11.4-26.P2.el7_9.9 &gt;&gt;&gt;&gt; @192.168.50.11 web2.dns.lab
+; &lt;&lt;&gt;&gt; DiG 9.11.4-P2-RedHat-9.11.4-26.P2.el7_9.9 &gt;&gt;&gt;&gt; @192.168.50.11 web2.dns.lab
 ; (1 server found)
 ;; global options: +cmd
 ;; Got answer:
-;; -&gt;&gt;HEADER&gt;&gt;- opcode: QUERY, status: NOERROR, id: 19040
+;; -&gt;&gt;HEADER&lt;&lt;- opcode: QUERY, status: NOERROR, id: 19040
 ;; flags: qr aa rd ra; QUERY: 1, ANSWER: 1, AUTHORITY: 2, ADDITIONAL: 3
 
 ;; OPT PSEUDOSECTION:
@@ -469,7 +466,7 @@ ns02.dns.lab.           3600    IN      A       192.168.50.11
 
 <h4>Добавление имён в зону dns.lab с помощью Ansible</h4>
 
-<p>В существующем Ansible-playbook менять ничего не потребуется. Нам потребуется добавить стоки с новыми именами в файл named.dns.lab и снова запустить Ansible.</p>
+<p>В существующем Ansible-playbook добавим строки с новыми именами в файл named.dns.lab и снова запустить Ansible.</p>
 
 <p>Модули, которые внесут данные изменения (переписаны в YAML формате):</p>
 
@@ -580,7 +577,278 @@ www             IN      A       192.168.50.16</b></pre>
 
 <h4>2. Настройка Split-DNS</h4>
 
+<p>У нас уже есть прописанные зоны <b>dns.lab</b> и <b>newdns.lab</b>. Однако по заданию client1 должен видеть запись web1.dns.lab и не видеть запись web2.dns.lab. Client2 может видеть обе записи из домена dns.lab, но не должен видеть записи
+домена newdns.lab Осуществить данные настройки нам поможет технология Split-DNS.</p>
 
+<p>Для настройки Split-DNS нужно:<br />
+1) Создать дополнительный файл зоны dns.lab, в котором будет прописана только одна запись:</p>
 
+<pre>vi /etc/named/named.dns.lab.client
+
+@               IN      SOA     ns01.dns.lab. root.dns.lab. (
+                            2711201007 ; serial
+                            3600       ; refresh (1 hour)
+                            600        ; retry (10 minutes)
+                            86400      ; expire (1 day)
+                            600        ; minimum (10 minutes)
+                        )
+
+                IN      NS      ns01.dns.lab.
+                IN      NS      ns02.dns.lab.
+
+$TTL 3600
+$ORIGIN dns.lab.
+@               IN      SOA     ns01.dns.lab. root.dns.lab. (
+                            2711201407 ; serial
+                            3600       ; refresh (1 hour)
+                            600        ; retry (10 minutes)
+                            86400      ; expire (1 day)
+                            600        ; minimum (10 minutes)
+                        )
+                IN      NS      ns01.dns.lab.
+                IN      NS      ns02.dns.lab.
+
+; DNS Servers
+ns01            IN      A       192.168.50.10
+ns02            IN      A       192.168.50.11
+
+; Web
+web1            IN      A       192.168.50.15</pre>
+
+<p>Имя файла может отличаться от указанной зоны. У файла должны быть права 660, владелец — root, группа — named.</p>
+
+<p>2) Внесём изменения в файл /etc/named.conf на хостах ns01 и ns02. Прежде всего нужно сделать access листы для хостов client и client2. Сначала сгенерируем ключи для хостов client и client2, для этого на хосте ns01 запустим утилиту tsig-keygen (ключ может генериться 5 минут и более):</p>
+
+<pre>[root@ns01 ~]# tsig-keygen
+key "tsig-key" {
+        algorithm hmac-sha256;
+        secret "zYZYLMudi0UQ2Nicd+gfGBqo8xqS/lcDiWzoIXqOS/o=";
+};
+[root@ns01 ~]#</pre>
+
+<p>После генерации, мы увидем ключ (secret) и алгоритм с помощью которого он был сгенерирован. Оба этих параметра нам потребуются в access листе.</p>
+
+<p>Если нам потребуется, использовать другой алогоритм, то мы можем его указать как аргумент к команде, например:</p> 
+
+<pre>tsig-keygen -a hmac-md5</pre>
+
+<p>Всего нам потребуется 2 таких ключа:</p> 
+
+<pre>[root@ns01 ~]# tsig-keygen
+key "tsig-key" {
+        algorithm hmac-sha256;
+        secret "gZy1eQJB/wPCRrf5hwzsNHp4gW2seMRhRBHTZF+ps34=";
+};
+[root@ns01 ~]#</pre>
+
+<p>После их генерации добавим блок с access
+листами в конец файла /etc/named.conf:</p>
+
+<pre>#Описание ключа для хоста client
+key "client-key" {
+  algorithm hmac-sha256;
+  secret "zYZYLMudi0UQ2Nicd+gfGBqo8xqS/lcDiWzoIXqOS/o=";
+};
+#Описание ключа для хоста client2
+key "client2-key" {
+  algorithm hmac-sha256;
+  secret "gZy1eQJB/wPCRrf5hwzsNHp4gW2seMRhRBHTZF+ps34=";
+};
+#Описание access-листов
+acl client { !key client2-key; key client-key; 192.168.50.15; };
+acl client2 { !key client-key; key client2-key; 192.168.50.16; };</pre>
+
+<p>В данном блоке access листов мы выделяем 2 блока:<br />
+● client имеет адрес 192.168.50.15, использует client-key и не использует client2-key<br />
+● client2 имеет адрес 192ю168.50.16, использует clinet2-key и не использует client-key</p>
+
+<p>Описание ключей и access листов будет одинаковое для master и slave сервера.</p>
+
+<p>Далее создадим файл с настройками зоны dns.lab для client, для этого на мастер сервере создаём файл /etc/named/named.dns.lab.client и добавляем в него следующее содержимое:</p>
+
+<pre>$TTL 3600
+$ORIGIN dns.lab.
+@               IN      SOA     ns01.dns.lab. root.dns.lab. (
+                            2711201407 ; serial
+                            3600       ; refresh (1 hour)
+                            600        ; retry (10 minutes)
+                            86400      ; expire (1 day)
+                            600        ; minimum (10 minutes)
+                        )
+
+                IN      NS      ns01.dns.lab.
+                IN      NS      ns02.dns.lab.
+
+; DNS Servers
+ns01            IN      A       192.168.50.10
+ns02            IN      A       192.168.50.11
+
+; Web
+web1            IN      A       192.168.50.15</pre>
+
+<p>Это почти скопированный файл зоны dns.lab, в конце которого удалена строка с записью web2. Имя зоны надо оставить такой же — <b>dns.lab</b>.</p>
+
+<p>Теперь можно внести правки в <b>/etc/named.conf</b>.</p>
+
+<p>Технология Split-DNS реализуется с помощью описания представлений (view), для каждого отдельного acl. В каждое представление (view) добавляются только те зоны, которые разрешено видеть хостам, адреса которых указаны в access листе.</p>
+
+<p>Все ранее описанные зоны должны быть перенесены в модули view. Вне view зон быть недолжно, зона any должна всегда находиться в самом низу.</p>
+
+<p>После применения всех вышеуказанных правил на хосте ns01 мы получим следующее содержимое файла /etc/named.conf:</p>
+
+<pre>options {
+
+    // network 
+	listen-on port 53 { 192.168.50.10; };
+	listen-on-v6 port 53 { ::1; };
+
+    // data
+	directory 	"/var/named";
+	dump-file 	"/var/named/data/cache_dump.db";
+	statistics-file "/var/named/data/named_stats.txt";
+	memstatistics-file "/var/named/data/named_mem_stats.txt";
+
+    // server
+	recursion yes;
+	allow-query     { any; };
+    allow-transfer { any; };
+    
+    // dnssec
+	dnssec-enable yes;
+	dnssec-validation yes;
+
+    // others
+	bindkeys-file "/etc/named.iscdlv.key";
+	managed-keys-directory "/var/named/dynamic";
+	pid-file "/run/named/named.pid";
+	session-keyfile "/run/named/session.key";
+};
+
+logging {
+        channel default_debug {
+                file "data/named.run";
+                severity dynamic;
+        };
+};
+
+// RNDC Control for client
+key "rndc-key" {
+    algorithm hmac-md5;
+    secret "GrtiE9kz16GK+OKKU/qJvQ==";
+};
+controls {
+        inet 192.168.50.10 allow { 192.168.50.15; } keys { "rndc-key"; }; 
+};
+
+key "client-key" {
+    algorithm hmac-sha256;
+    secret "zYZYLMudi0UQ2Nicd+gfGBqo8xqS/lcDiWzoIXqOS/o=";
+};
+key "client2-key" {
+    algorithm hmac-sha256;
+    secret "gZy1eQJB/wPCRrf5hwzsNHp4gW2seMRhRBHTZF+ps34=";
+};
+
+// ZONE TRANSFER WITH TSIG
+include "/etc/named.zonetransfer.key"; 
+server 192.168.50.11 {
+    keys { "zonetransfer.key"; };
+};
+
+// Указание Access листов
+acl client { !key client2-key; key client-key; 192.168.50.15; };
+acl client2 { !key client-key; key client2-key; 192.168.50.16; };
+
+// Настройка первого view
+view "client" {
+
+    // Кому из клиентов разрешено подключаться, нужно указать имя access-листа
+    match-clients { client; };
+
+    // Описание зоны dns.lab для client
+    zone "dns.lab" {
+
+        // Тип сервера — мастер
+        type master;
+
+        // Добавляем ссылку на файл зоны, который создали в прошлом пункте
+        file "/etc/named/named.dns.lab.client";
+
+        // Адрес хостов, которым будет отправлена информация об изменении зоны
+        also-notify { 192.168.50.11 key client-key; };
+    };
+
+    // newdns.lab zone
+    zone "newdns.lab" {
+        type master;
+        file "/etc/named/named.newdns.lab";
+        also-notify { 192.168.50.11 key client-key; };
+    };
+};
+
+// Описание view для client2
+view "client2" {
+    match-clients { client2; };
+
+    // dns.lab zone
+    zone "dns.lab" {
+        type master;
+        file "/etc/named/named.dns.lab";
+        also-notify { 192.168.50.11 key client2-key; };
+    };
+
+    // dns.lab zone reverse
+    zone "50.168.192.in-addr.arpa" {
+        type master;
+        file "/etc/named/named.dns.lab.rev";
+        also-notify { 192.168.50.11 key client2-key; };
+    };
+};
+
+// Зона any, указана в файле самой последней
+view "default" {
+    match-clients { any; };
+
+    // root zone
+    zone "." IN {
+        type hint;
+        file "named.ca";
+    };
+
+    // zones like localhost
+    include "/etc/named.rfc1912.zones";
+
+    // root DNSKEY
+    include "/etc/named.root.key";
+
+    // dns.lab zone
+    zone "dns.lab" {
+        type master;
+        allow-transfer { key "zonetransfer.key"; };
+        file "/etc/named/named.dns.lab";
+    };
+
+    // dns.lab zone reverse
+    zone "50.168.192.in-addr.arpa" {
+        type master;
+        allow-transfer { key "zonetransfer.key"; };
+        file "/etc/named/named.dns.lab.rev";
+    };
+
+    // ddns.lab zone
+    zone "ddns.lab" {
+        type master;
+        allow-transfer { key "zonetransfer.key"; };
+        allow-update { key "zonetransfer.key"; };
+        file "/etc/named/named.ddns.lab";
+    };
+
+    // newdns.lab zone
+    zone "newdns.lab" {
+        type master;
+        allow-transfer { key "zonetransfer.key"; };
+        file "/etc/named/named.newdns.lab";
+    };
+};</pre>
 
 

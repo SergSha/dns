@@ -2,6 +2,7 @@
 - hosts: all
   become: yes
   tasks:
+
   - name: install packages
     yum: 
       name:
@@ -41,9 +42,12 @@
 
   - name: copy zones
     copy: src={{ item }} dest=/etc/named/ owner=root group=named mode=0660
-    with_fileglob:
-      - named.d*
-      - named.newdns.lab
+    loop:
+    - named.ddns.lab
+    - named.dns.lab
+    - named.dns.lab.client
+    - named.dns.lab.rev
+    - named.newdns.lab
 
   - name: copy resolv.conf to the servers
     template: src=servers-resolv.conf.j2 dest=/etc/resolv.conf owner=root group=root mode=0644
@@ -58,6 +62,7 @@
 - hosts: ns02
   become: yes
   tasks:
+
   - name: copy named.conf
     copy: src=slave-named.conf dest=/etc/named.conf owner=root group=named mode=0640
 
@@ -73,6 +78,7 @@
 - hosts: client
   become: yes
   tasks:
+
   - name: copy resolv.conf to the client
     copy: src=client-resolv.conf dest=/etc/resolv.conf owner=root group=root mode=0644
 
@@ -85,6 +91,7 @@
 - hosts: client2
   become: yes
   tasks:
+
   - name: copy resolv.conf to the client
     copy: src=client-resolv.conf dest=/etc/resolv.conf owner=root group=root mode=0644
 
