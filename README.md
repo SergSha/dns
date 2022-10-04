@@ -694,7 +694,7 @@ web1            IN      A       192.168.50.15</pre>
 
 <p>Все ранее описанные зоны должны быть перенесены в модули view. Вне view зон быть недолжно, зона any должна всегда находиться в самом низу.</p>
 
-<p>После применения всех вышеуказанных правил на хосте ns01 мы получим следующее содержимое файла /etc/named.conf:</p>
+<p>После применения всех вышеуказанных правил на хосте <b>ns01</b> мы получим следующее содержимое файла /etc/named.conf:</p>
 
 <pre>options {
 
@@ -851,38 +851,188 @@ view "default" {
     };
 };</pre>
 
+<p>Содержимое файла /etc/named.conf на хосте <b>ns02</b>:</p>
 
+<pre>options {
 
+    // network 
+	listen-on port 53 { 192.168.50.11; };
+	listen-on-v6 port 53 { ::1; };
 
+    // data
+	directory 	"/var/named";
+	dump-file 	"/var/named/data/cache_dump.db";
+	statistics-file "/var/named/data/named_stats.txt";
+	memstatistics-file "/var/named/data/named_mem_stats.txt";
 
+    // server
+	recursion yes;
+	allow-query     { any; };
+    allow-transfer { any; };
+    
+    // dnssec
+	dnssec-enable yes;
+	dnssec-validation yes;
 
+    // others
+	bindkeys-file "/etc/named.iscdlv.key";
+	managed-keys-directory "/var/named/dynamic";
+	pid-file "/run/named/named.pid";
+	session-keyfile "/run/named/session.key";
+};
 
+logging {
+        channel default_debug {
+                file "data/named.run";
+                severity dynamic;
+        };
+};
 
+// RNDC Control for client
+key "rndc-key" {
+    algorithm hmac-md5;
+    secret "GrtiE9kz16GK+OKKU/qJvQ==";
+};
+controls {
+        inet 192.168.50.11 allow { 192.168.50.15; } keys { "rndc-key"; };
+}; 
+
+key "client-key" {
+    algorithm hmac-sha256;
+    secret "zYZYLMudi0UQ2Nicd+gfGBqo8xqS/lcDiWzoIXqOS/o=";
+};
+key "client2-key" {
+    algorithm hmac-sha256;
+    secret "gZy1eQJB/wPCRrf5hwzsNHp4gW2seMRhRBHTZF+ps34=";
+};
+
+// ZONE TRANSFER WITH TSIG
+include "/etc/named.zonetransfer.key"; 
+server 192.168.50.10 {
+    keys { "zonetransfer.key"; };
+};
+
+// Указание Access листов
+acl client { !key client2-key; key client-key; 192.168.50.15; };
+acl client2 { !key client-key; key client2-key; 192.168.50.16; };
+
+// Настройка первого view
+view "client" {
+
+    // Кому из клиентов разрешено подключаться, нужно указать имя access-листа
+    match-clients { client; };
+
+    // Описание зоны dns.lab для client
+    zone "dns.lab" {
+
+        // Тип сервера — slave
+        type slave;
+
+        // Добавляем ссылку на файл зоны, который создали в прошлом пункте
+        file "/etc/named/named.dns.lab.client";
+
+        // Адрес хостов, которым будет отправлена информация об изменении зоны
+        masters { 192.168.50.10 key client-key; };
+    };
+
+    // newdns.lab zone
+    zone "newdns.lab" {
+        type slave;
+        file "/etc/named/named.newdns.lab";
+        masters { 192.168.50.10 key client-key; };
+    };
+};
+
+// Описание view для client2
+view "client2" {
+    match-clients { client2; };
+
+    // dns.lab zone
+    zone "dns.lab" {
+        type slave;
+        file "/etc/named/named.dns.lab";
+        masters { 192.168.50.10 key client2-key; };
+    };
+
+    // dns.lab zone reverse
+    zone "50.168.192.in-addr.arpa" {
+        type slave;
+        file "/etc/named/named.dns.lab.rev";
+        masters { 192.168.50.10 key client2-key; };
+    };
+};
+
+// Зона any, указана в файле самой последней
+view "default" {
+    match-clients { any; };
+
+    // root zone
+    zone "." IN {
+        type hint;
+        file "named.ca";
+    };
+
+    // zones like localhost
+    include "/etc/named.rfc1912.zones";
+
+    // root DNSKEY
+    include "/etc/named.root.key";
+
+    // dns.lab zone
+    zone "dns.lab" {
+        type slave;
+        masters { 192.168.50.10; };
+        file "/etc/named/named.dns.lab";
+    };
+
+    // dns.lab zone reverse
+    zone "50.168.192.in-addr.arpa" {
+        type slave;
+        masters { 192.168.50.10; };
+        file "/etc/named/named.dns.lab.rev";
+    };
+
+    // ddns.lab zone
+    zone "ddns.lab" {
+        type slave;
+        masters { 192.168.50.10; };
+#        allow-update { key "zonetransfer.key"; };
+        file "/etc/named/named.ddns.lab";
+    };
+
+    // newdns.lab zone
+    zone "newdns.lab" {
+        type slave;
+        masters { 192.168.50.10; };
+        file "/etc/named/named.newdns.lab";
+    };
+};
+</pre>
 
 <h4>Проверка на client:</h4>
 
 <pre>[root@client ~]# ping -c 4 www.newdns.lab
 PING www.newdns.lab (192.168.50.15) 56(84) bytes of data.
 64 bytes from client (192.168.50.15): icmp_seq=1 ttl=64 time=0.016 ms
-64 bytes from client (192.168.50.15): icmp_seq=2 ttl=64 time=0.032 ms
-64 bytes from client (192.168.50.15): icmp_seq=3 ttl=64 time=0.073 ms
-64 bytes from client (192.168.50.15): icmp_seq=4 ttl=64 time=0.036 ms
+64 bytes from client (192.168.50.15): icmp_seq=2 ttl=64 time=0.076 ms
+64 bytes from client (192.168.50.15): icmp_seq=3 ttl=64 time=0.079 ms
+64 bytes from client (192.168.50.15): icmp_seq=4 ttl=64 time=0.075 ms
 
 --- www.newdns.lab ping statistics ---
-4 packets transmitted, 4 received, 0% packet loss, time 3000ms
-rtt min/avg/max/mdev = 0.016/0.039/0.073/0.021 ms
+4 packets transmitted, 4 received, 0% packet loss, time 3001ms
+rtt min/avg/max/mdev = 0.016/0.061/0.079/0.027 ms
 [root@client ~]#</pre>
 
 <pre>[root@client ~]# ping -c 4 web1.dns.lab
 PING web1.dns.lab (192.168.50.15) 56(84) bytes of data.
-64 bytes from client (192.168.50.15): icmp_seq=1 ttl=64 time=0.013 ms
-64 bytes from client (192.168.50.15): icmp_seq=2 ttl=64 time=0.033 ms
-64 bytes from client (192.168.50.15): icmp_seq=3 ttl=64 time=0.033 ms
-64 bytes from client (192.168.50.15): icmp_seq=4 ttl=64 time=0.053 ms
+64 bytes from client (192.168.50.15): icmp_seq=1 ttl=64 time=0.012 ms
+64 bytes from client (192.168.50.15): icmp_seq=2 ttl=64 time=0.077 ms
+64 bytes from client (192.168.50.15): icmp_seq=3 ttl=64 time=0.077 ms
+64 bytes from client (192.168.50.15): icmp_seq=4 ttl=64 time=0.038 ms
 
 --- web1.dns.lab ping statistics ---
-4 packets transmitted, 4 received, 0% packet loss, time 3002ms
-rtt min/avg/max/mdev = 0.013/0.033/0.053/0.014 ms
+4 packets transmitted, 4 received, 0% packet loss, time 3001ms
+rtt min/avg/max/mdev = 0.012/0.051/0.077/0.027 ms
 [root@client ~]#</pre>
 
 <pre>[root@client ~]# ping -c 4 web2.dns.lab
@@ -899,26 +1049,26 @@ ping: www.newdns.lab: Name or service not known
 
 <pre>[root@client2 ~]# ping -c 4 web1.dns.lab
 PING web1.dns.lab (192.168.50.15) 56(84) bytes of data.
-64 bytes from 192.168.50.15 (192.168.50.15): icmp_seq=1 ttl=64 time=3.81 ms
-64 bytes from 192.168.50.15 (192.168.50.15): icmp_seq=2 ttl=64 time=1.62 ms
-64 bytes from 192.168.50.15 (192.168.50.15): icmp_seq=3 ttl=64 time=1.45 ms
-64 bytes from 192.168.50.15 (192.168.50.15): icmp_seq=4 ttl=64 time=1.52 ms
+64 bytes from 192.168.50.15 (192.168.50.15): icmp_seq=1 ttl=64 time=4.07 ms
+64 bytes from 192.168.50.15 (192.168.50.15): icmp_seq=2 ttl=64 time=1.24 ms
+64 bytes from 192.168.50.15 (192.168.50.15): icmp_seq=3 ttl=64 time=1.30 ms
+64 bytes from 192.168.50.15 (192.168.50.15): icmp_seq=4 ttl=64 time=1.26 ms
 
 --- web1.dns.lab ping statistics ---
 4 packets transmitted, 4 received, 0% packet loss, time 3006ms
-rtt min/avg/max/mdev = 1.453/2.104/3.818/0.992 ms
+rtt min/avg/max/mdev = 1.244/1.973/4.074/1.213 ms
 [root@client2 ~]#</pre>
 
 <pre>[root@client2 ~]# ping -c 4 web2.dns.lab
 PING web2.dns.lab (192.168.50.16) 56(84) bytes of data.
-64 bytes from client2 (192.168.50.16): icmp_seq=1 ttl=64 time=0.048 ms
-64 bytes from client2 (192.168.50.16): icmp_seq=2 ttl=64 time=0.037 ms
-64 bytes from client2 (192.168.50.16): icmp_seq=3 ttl=64 time=0.038 ms
-64 bytes from client2 (192.168.50.16): icmp_seq=4 ttl=64 time=0.045 ms
+64 bytes from client2 (192.168.50.16): icmp_seq=1 ttl=64 time=0.060 ms
+64 bytes from client2 (192.168.50.16): icmp_seq=2 ttl=64 time=0.076 ms
+64 bytes from client2 (192.168.50.16): icmp_seq=3 ttl=64 time=0.074 ms
+64 bytes from client2 (192.168.50.16): icmp_seq=4 ttl=64 time=0.078 ms
 
 --- web2.dns.lab ping statistics ---
-4 packets transmitted, 4 received, 0% packet loss, time 3001ms
-rtt min/avg/max/mdev = 0.037/0.042/0.048/0.004 ms
+4 packets transmitted, 4 received, 0% packet loss, time 3010ms
+rtt min/avg/max/mdev = 0.060/0.072/0.078/0.007 ms
 [root@client2 ~]#</pre>
 
 <p>Тут мы понимаем, что client2 видит всю зону dns.lab и не видит зону newdns.lab</p>
@@ -934,48 +1084,31 @@ nameserver 192.168.50.11</pre>
 
 <pre>[root@client ~]# ping -c 4 www.newdns.lab
 PING www.newdns.lab (192.168.50.15) 56(84) bytes of data.
-64 bytes from client (192.168.50.15): icmp_seq=1 ttl=64 time=0.032 ms
-64 bytes from client (192.168.50.15): icmp_seq=2 ttl=64 time=0.033 ms
-64 bytes from client (192.168.50.15): icmp_seq=3 ttl=64 time=0.035 ms
-64 bytes from client (192.168.50.15): icmp_seq=4 ttl=64 time=0.035 ms
+64 bytes from client (192.168.50.15): icmp_seq=1 ttl=64 time=0.013 ms
+64 bytes from client (192.168.50.15): icmp_seq=2 ttl=64 time=0.116 ms
+64 bytes from client (192.168.50.15): icmp_seq=3 ttl=64 time=0.120 ms
+64 bytes from client (192.168.50.15): icmp_seq=4 ttl=64 time=0.077 ms
 
 --- www.newdns.lab ping statistics ---
-4 packets transmitted, 4 received, 0% packet loss, time 3002ms
-rtt min/avg/max/mdev = 0.032/0.033/0.035/0.007 ms
+4 packets transmitted, 4 received, 0% packet loss, time 3007ms
+rtt min/avg/max/mdev = 0.013/0.081/0.120/0.043 ms
 [root@client ~]#</pre>
 
 <pre>[root@client ~]# ping -c 4 web1.dns.lab
 PING web1.dns.lab (192.168.50.15) 56(84) bytes of data.
-64 bytes from client (192.168.50.15): icmp_seq=1 ttl=64 time=0.015 ms
-64 bytes from client (192.168.50.15): icmp_seq=2 ttl=64 time=0.037 ms
-64 bytes from client (192.168.50.15): icmp_seq=3 ttl=64 time=0.130 ms
-64 bytes from client (192.168.50.15): icmp_seq=4 ttl=64 time=0.034 ms
+64 bytes from client (192.168.50.15): icmp_seq=1 ttl=64 time=0.068 ms
+64 bytes from client (192.168.50.15): icmp_seq=2 ttl=64 time=0.076 ms
+64 bytes from client (192.168.50.15): icmp_seq=3 ttl=64 time=0.078 ms
+64 bytes from client (192.168.50.15): icmp_seq=4 ttl=64 time=0.078 ms
 
 --- web1.dns.lab ping statistics ---
-4 packets transmitted, 4 received, 0% packet loss, time 3002ms
-rtt min/avg/max/mdev = 0.015/0.054/0.130/0.044 ms
+4 packets transmitted, 4 received, 0% packet loss, time 3001ms
+rtt min/avg/max/mdev = 0.068/0.075/0.078/0.004 ms
 [root@client ~]#</pre>
 
-<pre>
-???????????????????????????????????????????????????????????????????????????
-
-[root@client ~]# ping -c 4 web2.dns.lab
-PING web2.dns.lab (192.168.50.16) 56(84) bytes of data.
-64 bytes from 192.168.50.16 (192.168.50.16): icmp_seq=1 ttl=64 time=1.72 ms
-64 bytes from 192.168.50.16 (192.168.50.16): icmp_seq=2 ttl=64 time=2.02 ms
-64 bytes from 192.168.50.16 (192.168.50.16): icmp_seq=3 ttl=64 time=1.33 ms
-64 bytes from 192.168.50.16 (192.168.50.16): icmp_seq=4 ttl=64 time=1.04 ms
-
---- web2.dns.lab ping statistics ---
-4 packets transmitted, 4 received, 0% packet loss, time 3006ms
-rtt min/avg/max/mdev = 1.049/1.533/2.028/0.375 ms
-[root@client ~]# vi /etc/resolv.conf
-[root@client ~]# ping -c 4 web2.dns.lab
+<pre>[root@client ~]# ping -c 4 web2.dns.lab
 ping: web2.dns.lab: Name or service not known
-[root@client ~]#
-
-???????????????????????????????????????????????????????????????????????????
-</pre>
+[root@client ~]#</pre>
 
 <p><b>client2:</b></p>
 
@@ -984,49 +1117,37 @@ domain dns.lab
 search dns.lab
 nameserver 192.168.50.11</pre>
 
-<pre>
-???????????????????????????????????????????????????????????????????????????
-
-[root@client2 ~]# ping -c 4  www.newdns.lab
-PING www.newdns.lab (192.168.50.16) 56(84) bytes of data.
-64 bytes from client2 (192.168.50.16): icmp_seq=1 ttl=64 time=0.042 ms
-64 bytes from client2 (192.168.50.16): icmp_seq=2 ttl=64 time=0.035 ms
-64 bytes from client2 (192.168.50.16): icmp_seq=3 ttl=64 time=0.061 ms
-64 bytes from client2 (192.168.50.16): icmp_seq=4 ttl=64 time=0.051 ms
-
---- www.newdns.lab ping statistics ---
-4 packets transmitted, 4 received, 0% packet loss, time 3000ms
-rtt min/avg/max/mdev = 0.035/0.047/0.061/0.010 ms
-[root@client2 ~]# vi /etc/resolv.conf
-[root@client2 ~]# ping -c 4  www.newdns.lab
+<pre>[root@client2 ~]# ping -c 4 www.newdns.lab
 ping: www.newdns.lab: Name or service not known
-[root@client2 ~]#
+[root@client2 ~]#</pre>
 
-???????????????????????????????????????????????????????????????????????????
-</pre>
-
-<pre>[root@client2 ~]# ping -c 4 web1.dns.lab
+<pre>[root@client2 ~]# ping -c 4 www.newdns.lab
+ping: www.newdns.lab: Name or service not known
+[root@client2 ~]# ping -c 4 web1.dns.lab
 PING web1.dns.lab (192.168.50.15) 56(84) bytes of data.
-64 bytes from 192.168.50.15 (192.168.50.15): icmp_seq=1 ttl=64 time=1.79 ms
-64 bytes from 192.168.50.15 (192.168.50.15): icmp_seq=2 ttl=64 time=1.56 ms
-64 bytes from 192.168.50.15 (192.168.50.15): icmp_seq=3 ttl=64 time=1.57 ms
-64 bytes from 192.168.50.15 (192.168.50.15): icmp_seq=4 ttl=64 time=1.34 ms
+64 bytes from 192.168.50.15 (192.168.50.15): icmp_seq=1 ttl=64 time=0.362 ms
+64 bytes from 192.168.50.15 (192.168.50.15): icmp_seq=2 ttl=64 time=1.13 ms
+64 bytes from 192.168.50.15 (192.168.50.15): icmp_seq=3 ttl=64 time=1.42 ms
+64 bytes from 192.168.50.15 (192.168.50.15): icmp_seq=4 ttl=64 time=1.28 ms
 
 --- web1.dns.lab ping statistics ---
-4 packets transmitted, 4 received, 0% packet loss, time 3005ms
-rtt min/avg/max/mdev = 1.343/1.570/1.799/0.166 ms
+4 packets transmitted, 4 received, 0% packet loss, time 3006ms
+rtt min/avg/max/mdev = 0.362/1.048/1.422/0.410 ms
 [root@client2 ~]#</pre>
 
 <pre>[root@client2 ~]# ping -c 4 web2.dns.lab
 PING web2.dns.lab (192.168.50.16) 56(84) bytes of data.
 64 bytes from client2 (192.168.50.16): icmp_seq=1 ttl=64 time=0.015 ms
-64 bytes from client2 (192.168.50.16): icmp_seq=2 ttl=64 time=0.037 ms
-64 bytes from client2 (192.168.50.16): icmp_seq=3 ttl=64 time=0.070 ms
-64 bytes from client2 (192.168.50.16): icmp_seq=4 ttl=64 time=0.069 ms
+64 bytes from client2 (192.168.50.16): icmp_seq=2 ttl=64 time=0.076 ms
+64 bytes from client2 (192.168.50.16): icmp_seq=3 ttl=64 time=0.077 ms
+64 bytes from client2 (192.168.50.16): icmp_seq=4 ttl=64 time=0.076 ms
 
 --- web2.dns.lab ping statistics ---
-4 packets transmitted, 4 received, 0% packet loss, time 3000ms
-rtt min/avg/max/mdev = 0.015/0.047/0.070/0.024 ms
+4 packets transmitted, 4 received, 0% packet loss, time 3001ms
+rtt min/avg/max/mdev = 0.015/0.061/0.077/0.026 ms
 [root@client2 ~]#</pre>
 
 <p>Как мы наблюдаем, что после удаления из /etc/resolv.conf строки 'nameserver 192.168.50.10' результаты теста практически те же самые.</p>
+
+
+

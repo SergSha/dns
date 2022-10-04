@@ -1,5 +1,5 @@
 ---
-- hosts: all
+- hosts: ns01 ns02
   become: yes
   tasks:
 
@@ -51,7 +51,6 @@
 
   - name: copy resolv.conf to the servers
     template: src=servers-resolv.conf.j2 dest=/etc/resolv.conf owner=root group=root mode=0644
-
   
   - name: set /etc/named permissions
     file: path=/etc/named owner=root group=named mode=0670
@@ -88,6 +87,30 @@
   - name: copy motd to the client
     copy: src=client-motd dest=/etc/motd owner=root group=root mode=0644
 
+  - name: client | ping to www.newdns.lab zone
+    shell: ping -c 4 www.newdns.lab 2>&1
+    register: ping_to_www_newdns_lab
+    ignore_errors: yes
+
+  - name: client | ping to web1.dns.lab zone
+    shell: ping -c 4 web1.dns.lab 2>&1
+    register: ping_to_web1_dns_lab
+    ignore_errors: yes
+
+  - name: client | ping to web2.dns.lab zone
+    shell: ping -c 4 web2.dns.lab 2>&1
+    register: ping_to_web2_dns_lab
+    ignore_errors: yes
+
+  - name: client | show result of ping to www.newdns.lab zone
+    debug: msg="{{ ping_to_www_newdns_lab.stdout_lines }}"
+
+  - name: client | show result of ping to web1.dns.lab zone
+    debug: msg="{{ ping_to_web1_dns_lab.stdout_lines }}"
+
+  - name: client | show result of ping to web2.dns.lab zone
+    debug: msg="{{ ping_to_web2_dns_lab.stdout_lines }}"
+
 - hosts: client2
   become: yes
   tasks:
@@ -100,4 +123,28 @@
 
   - name: copy motd to the client
     copy: src=client-motd dest=/etc/motd owner=root group=root mode=0644
+
+  - name: client2 | ping to www.newdns.lab zone
+    shell: ping -c 4 www.newdns.lab 2>&1
+    register: ping_to_www_newdns_lab
+    ignore_errors: yes
+
+  - name: client2 | ping to web1.dns.lab zone
+    shell: ping -c 4 web1.dns.lab 2>&1
+    register: ping_to_web1_dns_lab
+    ignore_errors: yes
+
+  - name: client2 | ping to web2.dns.lab zone
+    shell: ping -c 4 web2.dns.lab 2>&1
+    register: ping_to_web2_dns_lab
+    ignore_errors: yes
+
+  - name: client2 | show result of ping to www.newdns.lab zone
+    debug: msg="{{ ping_to_www_newdns_lab.stdout_lines }}"
+
+  - name: client2 | show result of ping to web1.dns.lab zone
+    debug: msg="{{ ping_to_web1_dns_lab.stdout_lines }}"
+
+  - name: client2 | show result of ping to web2.dns.lab zone
+    debug: msg="{{ ping_to_web2_dns_lab.stdout_lines }}"
 

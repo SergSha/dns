@@ -4,12 +4,11 @@
 Vagrant.configure(2) do |config|
   config.vm.box = "centos/7"
 
-  config.vm.provision "ansible" do |ansible|
+#  config.vm.provision "ansible" do |ansible|
 #    ansible.verbose = "vvv"
-    ansible.playbook = "provisioning/playbook.yml"
-    ansible.become = "true"
-  end
-
+#    ansible.playbook = "provisioning/playbook.yml"
+#    ansible.become = "true"
+#  end
 
   config.vm.provider "virtualbox" do |v|
 	  v.memory = 256
@@ -33,6 +32,15 @@ Vagrant.configure(2) do |config|
   config.vm.define "client2" do |client2|
     client2.vm.network "private_network", ip: "192.168.50.16", virtualbox__intnet: "dns"
     client2.vm.hostname = "client2"
+
+    client2.vm.provision "ansible" do |ansible|
+#      ansible.verbose = "vvv"
+      ansible.playbook = "provisioning/playbook.yml"
+      ansible.become = "true"
+      ansible.host_key_checking = "false"
+      ansible.limit = "all"
+    end
+
   end
 
 end
